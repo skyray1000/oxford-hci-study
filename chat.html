@@ -1,0 +1,501 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Research Conversation</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #f8f9fb; --surface: #ffffff; --border: #eaecf0; --text: #111827;
+    --muted: #9ca3af; --accent: #4f46e5; --accent-lt: #eef2ff; --accent-dk: #3730a3;
+    --radius: 8px; --radius-lg: 12px;
+  }
+  html, body { height: 100%; background: var(--bg); font-family: system-ui, -apple-system, sans-serif; color: var(--text); }
+  .shell { display: flex; flex-direction: column; height: 100vh; max-width: 760px; margin: 0 auto; }
+
+  header { padding: 14px 20px; border-bottom: 1px solid var(--border); background: var(--surface); display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
+  .header-dot { width: 8px; height: 8px; border-radius: 2px; background: var(--accent); flex-shrink: 0; }
+  .header-info h1 { font-size: .95rem; font-weight: 600; letter-spacing: -.01em; }
+  .header-info p { font-size: .72rem; color: var(--muted); margin-top: 1px; }
+  .turn-badge { margin-left: auto; background: var(--accent-lt); color: var(--accent); border-radius: var(--radius); padding: 3px 10px; font-size: .72rem; font-weight: 600; white-space: nowrap; }
+  /* Withdraw button lives in the header (to the right of the badge) so it never overlaps it on mobile */
+  .withdraw-btn { background: transparent; border: 1px solid var(--border); border-radius: 6px; padding: 4px 10px; font-size: .72rem; color: var(--muted); cursor: pointer; transition: all .15s; white-space: nowrap; }
+  .withdraw-btn:hover { background: #fee2e2; border-color: #fca5a5; color: #dc2626; }
+  .withdraw-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  .brief { background: #f0f4ff; border: 1px solid #c7d2fe; margin: 14px 16px 0; padding: 11px 14px; border-radius: var(--radius); font-size: .8rem; color: var(--accent-dk); line-height: 1.55; flex-shrink: 0; }
+  .brief strong { font-weight: 600; display: block; margin-bottom: 4px; font-size: .75rem; text-transform: uppercase; letter-spacing: .04em; }
+
+  .messages { flex: 1; overflow-y: auto; padding: 16px 16px 8px; display: flex; flex-direction: column; gap: 12px; scroll-behavior: smooth; }
+  .messages::-webkit-scrollbar { width: 4px; }
+  .messages::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+  .connecting { margin: auto; color: var(--muted); font-size: .82rem; display: flex; align-items: center; gap: 8px; }
+
+  .msg-row { display: flex; gap: 8px; align-items: flex-end; animation: fadeUp .2s ease both; }
+  .msg-row.user { flex-direction: row-reverse; }
+  @keyframes fadeUp { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+  .avatar { width: 28px; height: 28px; border-radius: var(--radius); flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: .62rem; font-weight: 600; }
+  .avatar.ai { background: var(--accent); color: #fff; }
+  .avatar.usr { background: #e5e7eb; color: #374151; }
+  .bubble { max-width: 78%; padding: 10px 13px; border-radius: var(--radius-lg); font-size: .87rem; line-height: 1.6; white-space: pre-wrap; }
+  .bubble.ai { background: var(--surface); border: 1px solid var(--border); border-bottom-left-radius: 3px; color: var(--text); }
+  .bubble.user { background: var(--accent); color: #fff; border-bottom-right-radius: 3px; }
+
+  .typing-dots { display: flex; gap: 4px; align-items: center; padding: 3px 0; }
+  .typing-dots span { width: 6px; height: 6px; border-radius: 50%; background: var(--muted); animation: blink 1.2s infinite; }
+  .typing-dots span:nth-child(2) { animation-delay: .2s; }
+  .typing-dots span:nth-child(3) { animation-delay: .4s; }
+  @keyframes blink { 0%,80%,100% { opacity: .2; transform: scale(.85); } 40% { opacity: 1; transform: scale(1); } }
+
+  /* ── Active disclosure overlay (modal) ── */
+  .overlay { position: fixed; inset: 0; background: rgba(17,24,39,0.55); display: none; align-items: center; justify-content: center; z-index: 300; padding: 20px; }
+  .overlay-card { background: var(--surface); border-radius: var(--radius-lg); padding: 28px 28px 24px; max-width: 480px; width: 100%; border: 1px solid var(--border); }
+  .overlay-card h2 { font-size: 1rem; font-weight: 600; margin-bottom: 14px; letter-spacing: -.01em; }
+  .overlay-warn { background: #fffbeb; border: 1px solid #fcd34d; border-radius: var(--radius); padding: 10px 13px; font-size: .82rem; color: #92400e; line-height: 1.55; margin-bottom: 18px; }
+  .checkbox-row { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 20px; cursor: pointer; }
+  .checkbox-row input[type="checkbox"] { width: 17px; height: 17px; margin-top: 2px; accent-color: var(--accent); flex-shrink: 0; cursor: pointer; }
+  .checkbox-row label { font-size: .83rem; color: var(--text); line-height: 1.5; cursor: pointer; }
+  .proceed-btn { width: 100%; padding: 11px; background: var(--accent); color: #fff; border: none; border-radius: var(--radius); font-size: .88rem; font-weight: 600; cursor: pointer; transition: background .15s; }
+  .proceed-btn:hover:not(:disabled) { background: var(--accent-dk); }
+  .proceed-btn:disabled { background: var(--border); cursor: not-allowed; color: var(--muted); }
+  .proceed-btn:focus-visible { outline: 2px solid var(--accent-dk); outline-offset: 2px; }
+
+  /* ── Passive disclosure footer ── */
+  .disclosure-footer { display: none; background: #fffbeb; border-top: 1px solid #fcd34d; padding: 8px 16px; font-size: .76rem; color: #92400e; align-items: center; gap: 8px; flex-shrink: 0; }
+  .disclosure-footer svg { width: 14px; height: 14px; flex-shrink: 0; stroke: #d97706; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+
+  /* ── End / withdrawn / error screen ── */
+  .end-screen { display: none; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 40px 24px; gap: 10px; flex: 1; }
+  .end-screen .end-icon { width: 52px; height: 52px; background: var(--accent-lt); color: var(--accent); border-radius: var(--radius-lg); display: flex; align-items: center; justify-content: center; font-size: 1.5rem; margin-bottom: 6px; }
+  .end-screen.withdrawn .end-icon, .end-screen.error .end-icon { background: #fee2e2; color: #dc2626; }
+  .end-screen h2 { font-size: 1.15rem; font-weight: 600; letter-spacing: -.01em; }
+  .end-screen p { font-size: .83rem; color: var(--muted); max-width: 360px; line-height: 1.6; }
+  .end-link { margin-top: 8px; font-size: .83rem; color: var(--accent); text-decoration: none; border: 1px solid var(--border); padding: 8px 16px; border-radius: var(--radius); }
+  .end-link:hover { background: var(--accent-lt); }
+
+  /* ── Input area ── */
+  .input-area { padding: 12px 16px 16px; background: var(--surface); border-top: 1px solid var(--border); flex-shrink: 0; }
+  .input-row { display: flex; gap: 8px; align-items: flex-end; }
+  textarea { flex: 1; resize: none; border: 1px solid var(--border); border-radius: var(--radius); padding: 10px 12px; font-family: inherit; font-size: .87rem; color: var(--text); background: var(--bg); outline: none; line-height: 1.5; max-height: 110px; min-height: 42px; transition: border-color .15s; overflow-y: auto; }
+  textarea:focus { border-color: var(--accent); }
+  textarea::placeholder { color: var(--muted); }
+  textarea:disabled { opacity: .45; cursor: not-allowed; }
+  button#send { width: 42px; height: 42px; border-radius: var(--radius); border: none; background: var(--accent); color: #fff; cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0; transition: background .15s, transform .1s; }
+  button#send:hover:not(:disabled) { background: var(--accent-dk); transform: scale(1.04); }
+  button#send:disabled { background: var(--border); cursor: not-allowed; transform: none; }
+  button#send:focus-visible { outline: 2px solid var(--accent-dk); outline-offset: 2px; }
+  button#send svg { width: 17px; height: 17px; }
+
+  /* ── Final-choice buttons (J4). Both styled identically so neither option is visually favoured. ── */
+  .choice-area { display: none; padding: 12px 16px 16px; background: var(--surface); border-top: 1px solid var(--border); flex-shrink: 0; }
+  .choice-row { display: flex; gap: 10px; }
+  .choice-btn { flex: 1; padding: 12px 14px; border: 1px solid #c7d2fe; background: var(--surface); color: var(--accent-dk); border-radius: var(--radius); font-size: .85rem; font-weight: 600; font-family: inherit; cursor: pointer; transition: background .15s, border-color .15s; line-height: 1.4; }
+  .choice-btn:hover:not(:disabled) { background: var(--accent-lt); border-color: var(--accent); }
+  .choice-btn:disabled { opacity: .5; cursor: not-allowed; }
+  .choice-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  @media (max-width: 480px) { .choice-row { flex-direction: column; } .header-info p { display: none; } }
+
+  /* ── Withdraw modal ── */
+  .withdraw-modal { display: none; position: fixed; inset: 0; background: rgba(17,24,39,0.5); z-index: 500; align-items: center; justify-content: center; padding: 20px; }
+  .withdraw-modal.show { display: flex; }
+  .withdraw-card { background: #fff; border-radius: 12px; padding: 24px; max-width: 400px; width: 100%; border: 1px solid var(--border); }
+  .withdraw-card h2 { font-size: .95rem; font-weight: 600; color: var(--text); margin-bottom: 10px; }
+  .withdraw-card p { font-size: .83rem; color: #6b7280; line-height: 1.6; margin-bottom: 20px; }
+  .withdraw-actions { display: flex; gap: 10px; justify-content: flex-end; }
+  .withdraw-cancel { padding: 8px 16px; border: 1px solid var(--border); border-radius: 6px; background: #fff; font-size: .83rem; cursor: pointer; color: #374151; }
+  .withdraw-confirm { padding: 8px 16px; border: none; border-radius: 6px; background: #dc2626; font-size: .83rem; cursor: pointer; color: #fff; }
+  .withdraw-confirm:disabled { opacity: .6; cursor: not-allowed; }
+
+  .toast { position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%); background: #dc2626; color: #fff; padding: 9px 18px; border-radius: var(--radius); font-size: .8rem; opacity: 0; pointer-events: none; transition: opacity .3s; z-index: 200; max-width: 90%; text-align: center; }
+  .toast.show { opacity: 1; }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+  }
+</style>
+</head>
+<body>
+
+<!-- Active-disclosure modal (shown only when disclosure_mode === "active") -->
+<div class="overlay" id="overlay" role="dialog" aria-modal="true" aria-labelledby="overlayTitle">
+  <div class="overlay-card">
+    <h2 id="overlayTitle">Before you begin, please read the following</h2>
+    <div class="overlay-warn">
+      This model is currently optimized for alignment. It may prioritize agreeing with your views over critical evaluation. This means responses may reflect what the model thinks you want to hear rather than providing independent evaluation. Please assess responses for logic and accuracy.
+    </div>
+    <label class="checkbox-row" for="ackCheck">
+      <input type="checkbox" id="ackCheck">
+      <span>I understand this model may agree with my views rather than providing critical evaluation.</span>
+    </label>
+    <button class="proceed-btn" id="proceedBtn" disabled>Proceed to conversation</button>
+  </div>
+</div>
+
+<div class="shell">
+  <header>
+    <div class="header-dot"></div>
+    <div class="header-info">
+      <h1>Research Conversation</h1>
+      <p>University of Oxford — Human-Computer Interaction Study</p>
+    </div>
+    <div class="turn-badge" id="turnBadge">Turn 1 of 6</div>
+    <button class="withdraw-btn" id="withdrawBtn" title="Withdraw from study">Withdraw</button>
+  </header>
+
+  <div class="brief" id="brief">
+    <strong>Study topic</strong>
+    Artificial intelligence is increasingly being used to help make important decisions — in hiring, university admissions, medical diagnosis, financial assessments, and more. People have a wide range of views on this, and there are no simple right or wrong answers. In this study, you will have a conversation with an AI chatbot about your opinion on the role of AI in decision-making.
+    <br><br>
+    To begin, please write 2–3 sentences describing your current view on whether or not AI should be used to help make important decisions that affect people's lives. You must stay on topic in order to receive compensation.
+  </div>
+
+  <div class="messages" id="messages">
+    <div class="connecting" id="connecting">
+      <div class="typing-dots"><span></span><span></span><span></span></div>
+      Connecting to the study…
+    </div>
+  </div>
+
+  <!-- End / withdrawn / error screen (text is filled in by JS) -->
+  <div class="end-screen" id="endScreen">
+    <div class="end-icon" id="endIcon">✓</div>
+    <h2 id="endTitle">Conversation complete</h2>
+    <p id="endBody">Thank you. Taking you back to the survey to continue.</p>
+    <a class="end-link" id="endLink" style="display:none" href="#">Continue</a>
+  </div>
+
+  <!-- Passive-disclosure footer (shown when disclosure_mode is "passive" or "active") -->
+  <div class="disclosure-footer" id="disclosureFooter">
+    <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+    <span>Note: This model may prioritize agreement over critical evaluation. Assess logic carefully.</span>
+  </div>
+
+  <!-- Final-choice buttons (J4), shown after turn 6 -->
+  <div class="choice-area" id="choiceArea">
+    <div class="choice-row">
+      <button class="choice-btn" id="altBtn">Hear an alternative perspective</button>
+      <button class="choice-btn" id="ownBtn">More about my own viewpoint</button>
+    </div>
+  </div>
+
+  <!-- Normal text input -->
+  <div class="input-area" id="inputArea">
+    <div class="input-row">
+      <textarea id="userInput" placeholder="Share your thoughts on AI in decision-making…" rows="1" disabled></textarea>
+      <button id="send" title="Send" disabled>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>
+        </svg>
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Withdraw confirmation modal -->
+<div class="withdraw-modal" id="withdrawModal" role="dialog" aria-modal="true">
+  <div class="withdraw-card">
+    <h2>Withdraw from study</h2>
+    <p>You have the right to withdraw at any time without penalty. If you withdraw, your responses will not be used in the research. Do you want to withdraw now?</p>
+    <div class="withdraw-actions">
+      <button class="withdraw-cancel" id="withdrawCancel">Cancel</button>
+      <button class="withdraw-confirm" id="withdrawConfirm">Confirm withdrawal</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* =========================================================================
+   CONFIGURATION — the only things you normally edit in this file.
+   There are NO API keys, model URLs, prompts, or condition names here:
+   everything sensitive lives on the backend.
+   ========================================================================= */
+const CONFIG = {
+  // Where your backend is running.
+  //   Local testing: leave as-is and run the backend on port 8000.
+  //   Production:    your deployed backend origin, e.g. "https://study-backend.example.ox.ac.uk"
+  BACKEND_URL: "http://127.0.0.1:8000",
+
+  // Your Qualtrics PART 2 survey link (post-conversation measures).
+  // Leave the placeholder while testing locally; the redirect is skipped until it's set.
+  QUALTRICS_PART2_URL: "https://YOUR_QUALTRICS_PART2_URL",
+
+  // Optional: a link shown on the "you've withdrawn" screen so participants can return
+  // their submission on Prolific. Leave "" to show no link (withdrawal never auto-redirects).
+  PROLIFIC_RETURN_URL: "",
+
+  // The first message (the participant's opinion) must be at least this many characters.
+  MIN_OPINION_CHARS: 40,
+};
+
+/* ===================== State (all client-side, non-sensitive) ===================== */
+let sessionId = null;
+let disclosureMode = "none";
+let started = false;          // has the participant sent their opinion yet?
+let finished = false;         // conversation complete or withdrawn?
+let isLocked = true;          // input locked until the session is ready
+let pendingKey = null;        // idempotency key for the in-flight message (reused on retry)
+let nextUserTurn = 1;
+
+/* ===================== Elements ===================== */
+const $ = (id) => document.getElementById(id);
+const messagesEl = $("messages"), connecting = $("connecting"), brief = $("brief"),
+      userInput = $("userInput"), sendBtn = $("send"), turnBadge = $("turnBadge"),
+      inputArea = $("inputArea"), choiceArea = $("choiceArea"),
+      ownBtn = $("ownBtn"), altBtn = $("altBtn"),
+      overlay = $("overlay"), ackCheck = $("ackCheck"), proceedBtn = $("proceedBtn"),
+      footer = $("disclosureFooter"), toast = $("toast"),
+      endScreen = $("endScreen"), endIcon = $("endIcon"), endTitle = $("endTitle"),
+      endBody = $("endBody"), endLink = $("endLink"),
+      withdrawBtn = $("withdrawBtn"), withdrawModal = $("withdrawModal"),
+      withdrawCancel = $("withdrawCancel"), withdrawConfirm = $("withdrawConfirm");
+
+/* ===================== Small helpers ===================== */
+function uuid() {
+  if (window.crypto && crypto.randomUUID) return crypto.randomUUID();
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0; return (c === "x" ? r : (r & 0x3) | 0x8).toString(16);
+  });
+}
+function showToast(msg) { toast.textContent = msg; toast.classList.add("show"); clearTimeout(showToast._t); showToast._t = setTimeout(() => toast.classList.remove("show"), 4000); }
+function setBadge(t) { turnBadge.textContent = t; }
+function lock(state) { isLocked = state; userInput.disabled = state; sendBtn.disabled = state; }
+function enableInput() { lock(false); userInput.focus(); }
+
+async function apiPost(path, body) {
+  const res = await fetch(CONFIG.BACKEND_URL + path, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  let data = null;
+  try { data = await res.json(); } catch (_) {}
+  if (!res.ok) {
+    const err = new Error((data && data.detail) || ("HTTP " + res.status));
+    err.status = res.status;
+    err.detail = data && data.detail;
+    throw err;
+  }
+  return data;
+}
+
+function appendMessage(role, text) {
+  const row = document.createElement("div");
+  row.className = "msg-row " + (role === "assistant" ? "ai" : "user");
+  const av = document.createElement("div");
+  av.className = "avatar " + (role === "assistant" ? "ai" : "usr");
+  av.textContent = role === "assistant" ? "AI" : "You";
+  const bub = document.createElement("div");
+  bub.className = "bubble " + (role === "assistant" ? "ai" : "user");
+  bub.textContent = text;
+  row.appendChild(av); row.appendChild(bub);
+  messagesEl.appendChild(row);
+  messagesEl.scrollTop = messagesEl.scrollHeight;
+}
+function removeLastUserBubble() {
+  const rows = messagesEl.querySelectorAll(".msg-row.user");
+  if (rows.length) rows[rows.length - 1].remove();
+}
+function showTyping() {
+  const row = document.createElement("div");
+  row.className = "msg-row ai"; row.id = "typing";
+  row.innerHTML = '<div class="avatar ai">AI</div><div class="bubble ai"><div class="typing-dots"><span></span><span></span><span></span></div></div>';
+  messagesEl.appendChild(row);
+  messagesEl.scrollTop = messagesEl.scrollHeight;
+}
+function removeTyping() { const el = $("typing"); if (el) el.remove(); }
+
+/* ===================== End / withdrawn / error screens ===================== */
+function showScreen(kind, title, body, linkUrl) {
+  finished = true; lock(true);
+  inputArea.style.display = "none";
+  choiceArea.style.display = "none";
+  overlay.style.display = "none";
+  footer.style.display = "none";
+  brief.style.display = "none";
+  messagesEl.style.display = "none";
+  if (kind !== "complete") withdrawBtn.style.display = "none";
+  endScreen.className = "end-screen " + kind;
+  endIcon.textContent = kind === "complete" ? "✓" : (kind === "withdrawn" ? "↩" : "!");
+  endTitle.textContent = title;
+  endBody.textContent = body;
+  if (linkUrl) { endLink.href = linkUrl; endLink.style.display = "inline-block"; }
+  endScreen.style.display = "flex";
+  setBadge(kind === "complete" ? "Complete" : (kind === "withdrawn" ? "Withdrawn" : "—"));
+}
+
+/* ===================== Conversation flow ===================== */
+function redirectToQualtrics() {
+  try {
+    const url = new URL(CONFIG.QUALTRICS_PART2_URL);
+    url.searchParams.set("study_session_id", sessionId);   // only the join key…
+    url.searchParams.set("chat_completed", "1");            // …and a completion flag. Nothing else.
+    window.location.href = url.toString();
+  } catch (e) { console.error("Qualtrics redirect URL is not valid:", e); }
+}
+
+function afterComplete() {
+  finished = true; lock(true);
+  // Let the acknowledgement sit on screen briefly, then show the completion screen and redirect.
+  setTimeout(() => {
+    showScreen("complete", "Conversation complete", "Thank you. Taking you back to the survey to continue.");
+    if (!CONFIG.QUALTRICS_PART2_URL.includes("YOUR_QUALTRICS")) setTimeout(redirectToQualtrics, 2500);
+  }, 1600);
+}
+
+function showFinalChoice() {
+  setBadge("Turn 6 of 6");
+  inputArea.style.display = "none";
+  choiceArea.style.display = "block";
+}
+
+async function sendOpinionOrTurn() {
+  if (isLocked || finished) return;
+  const text = userInput.value.trim();
+  if (!text) return;
+  if (!started && text.length < CONFIG.MIN_OPINION_CHARS) {
+    showToast("Please write at least 2–3 sentences (about " + CONFIG.MIN_OPINION_CHARS + " characters) before sending.");
+    return;
+  }
+  if (!pendingKey) pendingKey = uuid();          // new key per logical send; kept across retries
+  lock(true);
+  userInput.value = ""; userInput.style.height = "auto";
+  appendMessage("user", text);
+  showTyping();
+  try {
+    const data = await apiPost("/api/message", { study_session_id: sessionId, message: text, idempotency_key: pendingKey });
+    removeTyping();
+    pendingKey = null;
+    started = true;
+    appendMessage("assistant", data.reply);
+    if (data.complete) { afterComplete(); return; }
+    if (data.awaiting_final_choice) { showFinalChoice(); return; }
+    nextUserTurn = Math.min((data.turn || nextUserTurn) + 1, 6);
+    setBadge("Turn " + nextUserTurn + " of 6");
+    lock(false); userInput.focus();
+  } catch (e) {
+    removeTyping();
+    removeLastUserBubble();
+    userInput.value = text;                       // restore so they can resend
+    if (e.status === 409) { showScreen("complete", "Conversation complete", "This conversation has already ended. Taking you back to the survey."); if (!CONFIG.QUALTRICS_PART2_URL.includes("YOUR_QUALTRICS")) setTimeout(redirectToQualtrics, 2500); return; }
+    if (e.status === 404) { showScreen("error", "Session expired", "We couldn't find your session. Please return to the survey to continue."); return; }
+    showToast(e.detail || "Connection issue — please try again.");
+    lock(false);                                  // allow retry; pendingKey is reused for idempotency
+  }
+}
+
+async function chooseFinal(choice, label) {
+  if (isLocked || finished) return;
+  lock(true);
+  ownBtn.disabled = altBtn.disabled = true;
+  appendMessage("user", label);
+  if (!pendingKey) pendingKey = uuid();
+  showTyping();
+  try {
+    const data = await apiPost("/api/message", { study_session_id: sessionId, message: label, final_choice: choice, idempotency_key: pendingKey });
+    removeTyping();
+    pendingKey = null;
+    appendMessage("assistant", data.reply);
+    afterComplete();
+  } catch (e) {
+    removeTyping();
+    removeLastUserBubble();
+    ownBtn.disabled = altBtn.disabled = false;
+    lock(false);
+    showToast(e.detail || "Connection issue — please try again.");
+  }
+}
+
+/* ===================== Disclosure setup ===================== */
+function applyDisclosure() {
+  if (disclosureMode === "passive") { footer.style.display = "flex"; enableInput(); }
+  else if (disclosureMode === "active") { footer.style.display = "flex"; overlay.style.display = "flex"; ackCheck.focus(); }
+  else { enableInput(); }   // "none" — both control and the no-disclosure sycophantic condition
+}
+
+/* ===================== Session start ===================== */
+function getSessionId() { return new URLSearchParams(location.search).get("study_session_id"); }
+
+async function startSession() {
+  // force_condition is a LOCAL-TESTING aid only (lets you preview each disclosure UI in DEV_MODE).
+  // Production rejects it (403); we then quietly start the session normally.
+  const force = new URLSearchParams(location.search).get("force_condition");
+  if (force) {
+    try { return await apiPost("/api/session", { study_session_id: sessionId, force_condition: force }); }
+    catch (e) { if (e.status !== 403) throw e; }
+  }
+  return await apiPost("/api/session", { study_session_id: sessionId });
+}
+
+async function init() {
+  sessionId = getSessionId();
+  if (!sessionId) {
+    connecting.remove();
+    showScreen("error", "Session link needed", "Please open this page using the link from the survey so we can connect your responses.");
+    return;
+  }
+  setBadge("…");
+  let data;
+  try { data = await startSession(); }
+  catch (e) {
+    connecting.remove();
+    showScreen("error", "Couldn't connect", "We couldn't start the session. Please return to the survey and try again. If this keeps happening, contact the researcher.");
+    return;
+  }
+  connecting.remove();
+  disclosureMode = data.disclosure_mode || "none";
+
+  if (data.status === "withdrawn") { showWithdrawnScreen(); return; }
+  if (data.status === "completed") {
+    showScreen("complete", "Conversation complete", "You've already completed this conversation. Taking you back to the survey.");
+    if (!CONFIG.QUALTRICS_PART2_URL.includes("YOUR_QUALTRICS")) setTimeout(redirectToQualtrics, 2000);
+    return;
+  }
+  applyDisclosure();
+  setBadge("Turn 1 of 6");
+}
+
+/* ===================== Withdrawal ===================== */
+function showWithdrawnScreen() {
+  showScreen(
+    "withdrawn",
+    "You've withdrawn",
+    "You've withdrawn from the study and your responses won't be used. You can close this window now.",
+    CONFIG.PROLIFIC_RETURN_URL || null
+  );
+  if (CONFIG.PROLIFIC_RETURN_URL) endLink.textContent = "Return to Prolific";
+}
+
+withdrawBtn.addEventListener("click", () => { withdrawModal.classList.add("show"); });
+withdrawCancel.addEventListener("click", () => { withdrawModal.classList.remove("show"); });
+withdrawConfirm.addEventListener("click", async () => {
+  withdrawConfirm.disabled = true;
+  try { await apiPost("/api/withdraw", { study_session_id: sessionId }); }
+  catch (e) {
+    // 409 just means the session already ended; treat that as withdrawn too. Other errors: let them retry.
+    if (e.status !== 409) { withdrawConfirm.disabled = false; showToast(e.detail || "Couldn't withdraw — please try again."); return; }
+  }
+  withdrawModal.classList.remove("show");
+  showWithdrawnScreen();
+});
+
+/* ===================== Wiring ===================== */
+ackCheck.addEventListener("change", () => { proceedBtn.disabled = !ackCheck.checked; });
+proceedBtn.addEventListener("click", () => { overlay.style.display = "none"; enableInput(); });
+
+userInput.addEventListener("input", () => { userInput.style.height = "auto"; userInput.style.height = Math.min(userInput.scrollHeight, 110) + "px"; });
+userInput.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendOpinionOrTurn(); } });
+sendBtn.addEventListener("click", sendOpinionOrTurn);
+ownBtn.addEventListener("click", () => chooseFinal("own", "More about my own viewpoint"));
+altBtn.addEventListener("click", () => chooseFinal("alternative", "Hear an alternative perspective"));
+
+// Nudge participants not to refresh / navigate away mid-conversation (their turns are saved, but the
+// on-screen history isn't restored on reload).
+window.addEventListener("beforeunload", (e) => { if (started && !finished) { e.preventDefault(); e.returnValue = ""; } });
+
+init();
+</script>
+</body>
+</html>
