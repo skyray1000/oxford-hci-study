@@ -1,0 +1,12 @@
+# Never commit secrets or collected data
+.env
+*.db
+*.db-wal
+*.db-shm
+
+# Python noise
+__pycache__/
+*.pyc
+.venv/
+venv/
+.pytest_cache/
