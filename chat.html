@@ -61,6 +61,18 @@
   .proceed-btn:disabled { background: var(--border); cursor: not-allowed; color: var(--muted); }
   .proceed-btn:focus-visible { outline: 2px solid var(--accent-dk); outline-offset: 2px; }
 
+  /* ── Likert scale overlay (shown after turn 1 and after turn 6) ── */
+  .likert-q { font-size: .9rem; color: var(--text); line-height: 1.55; margin-bottom: 18px; }
+  .likert-scale { display: flex; justify-content: space-between; gap: 6px; margin-bottom: 10px; }
+  .likert-opt { flex: 1; display: flex; }
+  .likert-opt input[type="radio"] { position: absolute; opacity: 0; width: 0; height: 0; }
+  .likert-opt label { flex: 1; text-align: center; padding: 10px 0; border: 1px solid var(--border); border-radius: var(--radius); font-size: .9rem; font-weight: 600; color: var(--text); cursor: pointer; transition: background .12s, border-color .12s, color .12s; user-select: none; }
+  .likert-opt label:hover { border-color: var(--accent); background: var(--accent-lt); }
+  .likert-opt input[type="radio"]:checked + label { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .likert-opt input[type="radio"]:focus-visible + label { outline: 2px solid var(--accent-dk); outline-offset: 2px; }
+  .likert-ends { display: flex; justify-content: space-between; font-size: .72rem; color: var(--muted); margin-bottom: 20px; gap: 10px; }
+  .likert-ends span:last-child { text-align: right; }
+
   /* ── Passive disclosure footer ── */
   .disclosure-footer { display: none; background: #fffbeb; border-top: 1px solid #fcd34d; padding: 8px 16px; font-size: .76rem; color: #92400e; align-items: center; gap: 8px; flex-shrink: 0; }
   .disclosure-footer svg { width: 14px; height: 14px; flex-shrink: 0; stroke: #d97706; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
@@ -129,6 +141,25 @@
       <span>I understand this model may agree with my views rather than providing critical evaluation.</span>
     </label>
     <button class="proceed-btn" id="proceedBtn" disabled>Proceed to conversation</button>
+  </div>
+</div>
+
+<!-- Likert-scale overlay (shown deterministically after turn 1 and after turn 6) -->
+<div class="overlay" id="likertOverlay" role="dialog" aria-modal="true" aria-labelledby="likertTitle">
+  <div class="overlay-card">
+    <h2 id="likertTitle">One quick question</h2>
+    <p class="likert-q">At this moment, how right does your view on this topic feel to you?</p>
+    <div class="likert-scale" id="likertScale" role="radiogroup" aria-labelledby="likertTitle">
+      <div class="likert-opt"><input type="radio" name="likert" id="lk1" value="1"><label for="lk1">1</label></div>
+      <div class="likert-opt"><input type="radio" name="likert" id="lk2" value="2"><label for="lk2">2</label></div>
+      <div class="likert-opt"><input type="radio" name="likert" id="lk3" value="3"><label for="lk3">3</label></div>
+      <div class="likert-opt"><input type="radio" name="likert" id="lk4" value="4"><label for="lk4">4</label></div>
+      <div class="likert-opt"><input type="radio" name="likert" id="lk5" value="5"><label for="lk5">5</label></div>
+      <div class="likert-opt"><input type="radio" name="likert" id="lk6" value="6"><label for="lk6">6</label></div>
+      <div class="likert-opt"><input type="radio" name="likert" id="lk7" value="7"><label for="lk7">7</label></div>
+    </div>
+    <div class="likert-ends"><span>1 = Doesn't feel right at all</span><span>7 = Feels very right</span></div>
+    <button class="proceed-btn" id="likertSubmit" disabled>Continue</button>
   </div>
 </div>
 
@@ -238,6 +269,7 @@ let finished = false;         // conversation complete or withdrawn?
 let isLocked = true;          // input locked until the session is ready
 let pendingKey = null;        // idempotency key for the in-flight message (reused on retry)
 let nextUserTurn = 1;
+let lastReplyShownAt = null;  // ms timestamp when the most recent reply was shown (start of "thinking time")
 
 /* ===================== Elements ===================== */
 const $ = (id) => document.getElementById(id);
@@ -246,6 +278,7 @@ const messagesEl = $("messages"), connecting = $("connecting"), brief = $("brief
       inputArea = $("inputArea"), choiceArea = $("choiceArea"),
       ownBtn = $("ownBtn"), altBtn = $("altBtn"),
       overlay = $("overlay"), ackCheck = $("ackCheck"), proceedBtn = $("proceedBtn"),
+      likertOverlay = $("likertOverlay"), likertScale = $("likertScale"), likertSubmit = $("likertSubmit"),
       footer = $("disclosureFooter"), toast = $("toast"),
       endScreen = $("endScreen"), endIcon = $("endIcon"), endTitle = $("endTitle"),
       endBody = $("endBody"), endLink = $("endLink"),
@@ -263,6 +296,13 @@ function showToast(msg) { toast.textContent = msg; toast.classList.add("show"); 
 function setBadge(t) { turnBadge.textContent = t; }
 function lock(state) { isLocked = state; userInput.disabled = state; sendBtn.disabled = state; }
 function enableInput() { lock(false); userInput.focus(); }
+// Start the "thinking time" clock: the moment a reply (or the choice buttons) becomes visible.
+function markReplyShown() { lastReplyShownAt = Date.now(); }
+function takeThinkMs() {
+  if (lastReplyShownAt == null) return null;   // no preceding reply (e.g. the first opinion)
+  const ms = Date.now() - lastReplyShownAt;
+  return ms >= 0 ? ms : null;
+}
 
 async function apiPost(path, body) {
   const res = await fetch(CONFIG.BACKEND_URL + path, {
@@ -326,6 +366,39 @@ function showScreen(kind, title, body, linkUrl) {
   setBadge(kind === "complete" ? "Complete" : (kind === "withdrawn" ? "Withdrawn" : "—"));
 }
 
+/* ===================== Likert scale ===================== */
+// Shows the Likert overlay, waits for a valid answer, POSTs it, and resolves once saved.
+// Keeps the overlay open (with a toast) if saving fails, so the answer is never lost.
+function showLikert(phase) {
+  return new Promise((resolve) => {
+    likertScale.querySelectorAll('input[name="likert"]').forEach((r) => { r.checked = false; });
+    likertSubmit.disabled = true;
+    likertOverlay.style.display = "flex";
+    const first = likertScale.querySelector('input[name="likert"]');
+    if (first) first.focus();
+
+    const onChange = () => { likertSubmit.disabled = !likertScale.querySelector('input[name="likert"]:checked'); };
+    const onSubmit = async () => {
+      const picked = likertScale.querySelector('input[name="likert"]:checked');
+      if (!picked) return;
+      const value = parseInt(picked.value, 10);
+      likertSubmit.disabled = true;
+      try {
+        await apiPost("/api/likert", { study_session_id: sessionId, phase, value });
+      } catch (e) {
+        // 409 = session already finished; nothing more we can save, so let them proceed.
+        if (e.status !== 409) { likertSubmit.disabled = false; showToast(e.detail || "Couldn't save — please try again."); return; }
+      }
+      likertScale.removeEventListener("change", onChange);
+      likertSubmit.removeEventListener("click", onSubmit);
+      likertOverlay.style.display = "none";
+      resolve(value);
+    };
+    likertScale.addEventListener("change", onChange);
+    likertSubmit.addEventListener("click", onSubmit);
+  });
+}
+
 /* ===================== Conversation flow ===================== */
 function redirectToQualtrics() {
   try {
@@ -349,6 +422,7 @@ function showFinalChoice() {
   setBadge("Turn 6 of 6");
   inputArea.style.display = "none";
   choiceArea.style.display = "block";
+  markReplyShown();   // start the clock for time-to-choose
   isLocked = false;   // the send flow left the session locked; re-enable so the choice buttons work
 }
 
@@ -356,23 +430,37 @@ async function sendOpinionOrTurn() {
   if (isLocked || finished) return;
   const text = userInput.value.trim();
   if (!text) return;
-  if (!started && text.length < CONFIG.MIN_OPINION_CHARS) {
+  const isFirstSend = !started;                  // the very first send is the participant's opinion (turn 1)
+  if (isFirstSend && text.length < CONFIG.MIN_OPINION_CHARS) {
     showToast("Please write at least 2–3 sentences (about " + CONFIG.MIN_OPINION_CHARS + " characters) before sending.");
     return;
   }
+  const thinkMs = takeThinkMs();                 // reading + thinking + typing since the last reply was shown
   if (!pendingKey) pendingKey = uuid();          // new key per logical send; kept across retries
   lock(true);
   userInput.value = ""; userInput.style.height = "auto";
   appendMessage("user", text);
   showTyping();
   try {
-    const data = await apiPost("/api/message", { study_session_id: sessionId, message: text, idempotency_key: pendingKey });
+    const data = await apiPost("/api/message", { study_session_id: sessionId, message: text, idempotency_key: pendingKey, client_think_ms: thinkMs });
     removeTyping();
     pendingKey = null;
     started = true;
+    // After the FIRST message, ask the Likert item BEFORE revealing the model's reply.
+    if (isFirstSend) {
+      await showLikert("initial");
+      appendMessage("assistant", data.reply);
+      markReplyShown();
+      nextUserTurn = 2;
+      setBadge("Turn 2 of 6");
+      lock(false); userInput.focus();
+      return;
+    }
     appendMessage("assistant", data.reply);
     if (data.complete) { afterComplete(); return; }
-    if (data.awaiting_final_choice) { showFinalChoice(); return; }
+    markReplyShown();
+    // After the LAST turn, ask the Likert item again BEFORE showing the final-choice buttons.
+    if (data.awaiting_final_choice) { await showLikert("final"); showFinalChoice(); return; }
     nextUserTurn = Math.min((data.turn || nextUserTurn) + 1, 6);
     setBadge("Turn " + nextUserTurn + " of 6");
     lock(false); userInput.focus();
@@ -389,13 +477,14 @@ async function sendOpinionOrTurn() {
 
 async function chooseFinal(choice, label) {
   if (isLocked || finished) return;
+  const thinkMs = takeThinkMs();
   lock(true);
   ownBtn.disabled = altBtn.disabled = true;
   appendMessage("user", label);
   if (!pendingKey) pendingKey = uuid();
   showTyping();
   try {
-    const data = await apiPost("/api/message", { study_session_id: sessionId, message: label, final_choice: choice, idempotency_key: pendingKey });
+    const data = await apiPost("/api/message", { study_session_id: sessionId, message: label, final_choice: choice, idempotency_key: pendingKey, client_think_ms: thinkMs });
     removeTyping();
     pendingKey = null;
     appendMessage("assistant", data.reply);
