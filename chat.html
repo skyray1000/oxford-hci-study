@@ -349,6 +349,7 @@ function showFinalChoice() {
   setBadge("Turn 6 of 6");
   inputArea.style.display = "none";
   choiceArea.style.display = "block";
+  isLocked = false;   // the send flow left the session locked; re-enable so the choice buttons work
 }
 
 async function sendOpinionOrTurn() {
