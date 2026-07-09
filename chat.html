@@ -61,17 +61,24 @@
   .proceed-btn:disabled { background: var(--border); cursor: not-allowed; color: var(--muted); }
   .proceed-btn:focus-visible { outline: 2px solid var(--accent-dk); outline-offset: 2px; }
 
-  /* ── Likert scale overlay (shown after turn 1 and after turn 6) ── */
+  /* ── Likert scale overlay (shown after turn 1 and after turn 6) ──
+     Each option is a <label> wrapping a visually-hidden native radio and a
+     <span>. The whole cell is the click target, and the selected look is driven
+     by JS toggling `.sel` (with a CSS `:checked + span` fallback), so it does not
+     depend on any one browser rendering the sibling-combinator or the tiny hidden
+     radio hit-area — that fragility was the cross-browser problem. */
   .likert-q { font-size: .9rem; color: var(--text); line-height: 1.55; margin-bottom: 18px; }
   .likert-scale { display: flex; justify-content: space-between; gap: 6px; margin-bottom: 10px; }
-  .likert-opt { flex: 1; display: flex; }
-  .likert-opt input[type="radio"] { position: absolute; opacity: 0; width: 0; height: 0; }
-  .likert-opt label { flex: 1; text-align: center; padding: 10px 0; border: 1px solid var(--border); border-radius: var(--radius); font-size: .9rem; font-weight: 600; color: var(--text); cursor: pointer; transition: background .12s, border-color .12s, color .12s; user-select: none; }
-  .likert-opt label:hover { border-color: var(--accent); background: var(--accent-lt); }
-  .likert-opt input[type="radio"]:checked + label { background: var(--accent); border-color: var(--accent); color: #fff; }
-  .likert-opt input[type="radio"]:focus-visible + label { outline: 2px solid var(--accent-dk); outline-offset: 2px; }
+  .likert-opt { flex: 1 1 0; min-width: 0; margin: 0; position: relative; }
+  .likert-opt input { position: absolute; width: 1px; height: 1px; opacity: 0; margin: 0; pointer-events: none; }
+  .likert-opt span { display: block; text-align: center; padding: 12px 0; border: 1px solid var(--border); border-radius: var(--radius); font-size: .9rem; font-weight: 600; color: var(--text); cursor: pointer; -webkit-user-select: none; user-select: none; transition: background .12s, border-color .12s, color .12s; }
+  .likert-opt span:hover { border-color: var(--accent); background: var(--accent-lt); }
+  .likert-opt.sel span,
+  .likert-opt input:checked + span { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .likert-opt input:focus-visible + span { outline: 2px solid var(--accent-dk); outline-offset: 2px; }
   .likert-ends { display: flex; justify-content: space-between; font-size: .72rem; color: var(--muted); margin-bottom: 20px; gap: 10px; }
   .likert-ends span:last-child { text-align: right; }
+  @media (max-width: 420px) { .likert-scale { gap: 4px; } .likert-opt span { padding: 12px 0; font-size: .85rem; } }
 
   /* ── Passive disclosure footer ── */
   .disclosure-footer { display: none; background: #fffbeb; border-top: 1px solid #fcd34d; padding: 8px 16px; font-size: .76rem; color: #92400e; align-items: center; gap: 8px; flex-shrink: 0; }
@@ -150,13 +157,13 @@
     <h2 id="likertTitle">One quick question</h2>
     <p class="likert-q">At this moment, how right does your view on this topic feel to you?</p>
     <div class="likert-scale" id="likertScale" role="radiogroup" aria-labelledby="likertTitle">
-      <div class="likert-opt"><input type="radio" name="likert" id="lk1" value="1"><label for="lk1">1</label></div>
-      <div class="likert-opt"><input type="radio" name="likert" id="lk2" value="2"><label for="lk2">2</label></div>
-      <div class="likert-opt"><input type="radio" name="likert" id="lk3" value="3"><label for="lk3">3</label></div>
-      <div class="likert-opt"><input type="radio" name="likert" id="lk4" value="4"><label for="lk4">4</label></div>
-      <div class="likert-opt"><input type="radio" name="likert" id="lk5" value="5"><label for="lk5">5</label></div>
-      <div class="likert-opt"><input type="radio" name="likert" id="lk6" value="6"><label for="lk6">6</label></div>
-      <div class="likert-opt"><input type="radio" name="likert" id="lk7" value="7"><label for="lk7">7</label></div>
+      <label class="likert-opt"><input type="radio" name="likert" value="1"><span>1</span></label>
+      <label class="likert-opt"><input type="radio" name="likert" value="2"><span>2</span></label>
+      <label class="likert-opt"><input type="radio" name="likert" value="3"><span>3</span></label>
+      <label class="likert-opt"><input type="radio" name="likert" value="4"><span>4</span></label>
+      <label class="likert-opt"><input type="radio" name="likert" value="5"><span>5</span></label>
+      <label class="likert-opt"><input type="radio" name="likert" value="6"><span>6</span></label>
+      <label class="likert-opt"><input type="radio" name="likert" value="7"><span>7</span></label>
     </div>
     <div class="likert-ends"><span>1 = Doesn't feel right at all</span><span>7 = Feels very right</span></div>
     <button class="proceed-btn" id="likertSubmit" disabled>Continue</button>
@@ -371,15 +378,23 @@ function showScreen(kind, title, body, linkUrl) {
 // Keeps the overlay open (with a toast) if saving fails, so the answer is never lost.
 function showLikert(phase) {
   return new Promise((resolve) => {
-    likertScale.querySelectorAll('input[name="likert"]').forEach((r) => { r.checked = false; });
+    const opts = Array.prototype.slice.call(likertScale.querySelectorAll('input[name="likert"]'));
+    opts.forEach((r) => { r.checked = false; if (r.parentElement) r.parentElement.classList.remove("sel"); });
     likertSubmit.disabled = true;
     likertOverlay.style.display = "flex";
-    const first = likertScale.querySelector('input[name="likert"]');
+    const first = opts[0];
     if (first) first.focus();
 
-    const onChange = () => { likertSubmit.disabled = !likertScale.querySelector('input[name="likert"]:checked'); };
+    // Reads the real :checked state, so it's safe to fire from either change or click.
+    // Drives the selected look via a class (not just CSS :checked + span) for cross-browser reliability.
+    const refresh = () => {
+      let picked = null;
+      opts.forEach((r) => { if (r.checked) picked = r; if (r.parentElement) r.parentElement.classList.toggle("sel", r.checked); });
+      likertSubmit.disabled = !picked;
+      return picked;
+    };
     const onSubmit = async () => {
-      const picked = likertScale.querySelector('input[name="likert"]:checked');
+      const picked = refresh();
       if (!picked) return;
       const value = parseInt(picked.value, 10);
       likertSubmit.disabled = true;
@@ -389,12 +404,14 @@ function showLikert(phase) {
         // 409 = session already finished; nothing more we can save, so let them proceed.
         if (e.status !== 409) { likertSubmit.disabled = false; showToast(e.detail || "Couldn't save — please try again."); return; }
       }
-      likertScale.removeEventListener("change", onChange);
+      likertScale.removeEventListener("change", refresh);
+      likertScale.removeEventListener("click", refresh);
       likertSubmit.removeEventListener("click", onSubmit);
       likertOverlay.style.display = "none";
       resolve(value);
     };
-    likertScale.addEventListener("change", onChange);
+    likertScale.addEventListener("change", refresh);
+    likertScale.addEventListener("click", refresh);   // fallback for browsers slow to fire 'change' on the wrapped radio
     likertSubmit.addEventListener("click", onSubmit);
   });
 }
