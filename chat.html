@@ -3,6 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<!-- Never send the URL (which briefly carries the participant/session ids) in a Referer header. -->
+<meta name="referrer" content="no-referrer">
 <title>Research Conversation</title>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -277,6 +279,8 @@ let isLocked = true;          // input locked until the session is ready
 let pendingKey = null;        // idempotency key for the in-flight message (reused on retry)
 let nextUserTurn = 1;
 let lastReplyShownAt = null;  // ms timestamp when the most recent reply was shown (start of "thinking time")
+let prolificPid = null;       // captured from the entry URL (see captureEntryParams)
+let forceCondition = null;    // DEV-only preview aid, captured from the entry URL
 
 /* ===================== Elements ===================== */
 const $ = (id) => document.getElementById(id);
@@ -523,21 +527,42 @@ function applyDisclosure() {
 }
 
 /* ===================== Session start ===================== */
-function getSessionId() { return new URLSearchParams(location.search).get("study_session_id"); }
+// Read the entry-URL params (study_session_id, Prolific PID, force_condition) once, stash them in
+// sessionStorage so a same-tab refresh can still resume, then STRIP the query from the visible URL
+// so the ids don't linger in the address bar / history / get shared. sessionStorage is per-tab and
+// clears when the tab closes.
+function captureEntryParams() {
+  const q = new URLSearchParams(location.search);
+  const pick = (k) => { const v = q.get(k); return v ? v.trim() : null; };
+  let sid = pick("study_session_id");
+  let pid = pick("PROLIFIC_PID") || pick("prolific_pid") || pick("pid");
+  let force = pick("force_condition");
+  try {
+    const ss = window.sessionStorage;
+    if (sid) ss.setItem("ox_sid", sid); else sid = ss.getItem("ox_sid");
+    if (pid) ss.setItem("ox_pid", pid); else pid = ss.getItem("ox_pid");
+    if (force) ss.setItem("ox_force", force); else force = ss.getItem("ox_force");
+  } catch (_) { /* private mode: fall back to whatever was in the URL */ }
+  if (location.search) { try { history.replaceState({}, "", location.pathname); } catch (_) {} }
+  sessionId = sid || null;
+  prolificPid = pid || null;
+  forceCondition = force || null;
+}
 
 async function startSession() {
+  const body = { study_session_id: sessionId };
+  if (prolificPid) body.prolific_pid = prolificPid;
   // force_condition is a LOCAL-TESTING aid only (lets you preview each disclosure UI in DEV_MODE).
   // Production rejects it (403); we then quietly start the session normally.
-  const force = new URLSearchParams(location.search).get("force_condition");
-  if (force) {
-    try { return await apiPost("/api/session", { study_session_id: sessionId, force_condition: force }); }
+  if (forceCondition) {
+    try { return await apiPost("/api/session", { ...body, force_condition: forceCondition }); }
     catch (e) { if (e.status !== 403) throw e; }
   }
-  return await apiPost("/api/session", { study_session_id: sessionId });
+  return await apiPost("/api/session", body);
 }
 
 async function init() {
-  sessionId = getSessionId();
+  captureEntryParams();
   if (!sessionId) {
     connecting.remove();
     showScreen("error", "Session link needed", "Please open this page using the link from the survey so we can connect your responses.");
@@ -548,6 +573,16 @@ async function init() {
   try { data = await startSession(); }
   catch (e) {
     connecting.remove();
+    // 409 = this participant already has a session (e.g. the URL id was changed). Don't hand them a
+    // fresh conversation; explain and point them back to the survey.
+    if (e.status === 409) {
+      showScreen("error", "Already started",
+        (e.detail || "It looks like you've already started this study.") +
+        " Please return to the survey tab to continue where you left off.",
+        CONFIG.PROLIFIC_RETURN_URL || null);
+      if (CONFIG.PROLIFIC_RETURN_URL) endLink.textContent = "Return to Prolific";
+      return;
+    }
     showScreen("error", "Couldn't connect", "We couldn't start the session. Please return to the survey and try again. If this keeps happening, contact the researcher.");
     return;
   }
