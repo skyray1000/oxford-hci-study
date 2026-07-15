@@ -259,11 +259,16 @@ const CONFIG = {
   //   Production:    your deployed backend origin, e.g. "https://study-backend.example.ox.ac.uk"
   BACKEND_URL: "https://oxford-hci-study.oii.ox.ac.uk",
 
-  // The origin of the Qualtrics survey that embeds this page in an <iframe>. When the
+  // The origin(s) of the Qualtrics survey that embeds this page in an <iframe>. When the
   // conversation ends we postMessage a completion signal to the parent so Qualtrics can
-  // advance to the next page. Setting an explicit origin (not "*") means the signal is
-  // only ever delivered to Qualtrics, never to any other page that might frame us.
-  QUALTRICS_ORIGIN: "https://oii.qualtrics.com",
+  // advance to the next page. We list both the brand domain and the EU-datacenter domain
+  // because Qualtrics may serve the survey from either (and a postMessage is silently
+  // dropped unless its target origin matches the parent's REAL origin exactly). Listing
+  // specific origins — not "*" — keeps the signal from ever going to some other framing page.
+  QUALTRICS_ORIGINS: [
+    "https://oii.eu.qualtrics.com",
+    "https://oii.qualtrics.com",
+  ],
 
   // STANDALONE-TESTING FALLBACK ONLY. When the page is opened directly (NOT embedded in
   // an iframe), there is no parent to notify, so on completion we redirect here instead so
@@ -435,14 +440,14 @@ function showLikert(phase) {
 // advance to the next page. Delivered ONLY to the Qualtrics origin. On the Qualtrics side, an event
 // listener on this message clicks the (hidden) Next button.
 function notifyParent(status) {
-  try {
-    if (window.parent && window.parent !== window) {
-      window.parent.postMessage(
-        { source: "oxford-chat", status: status, study_session_id: sessionId },
-        CONFIG.QUALTRICS_ORIGIN
-      );
-    }
-  } catch (_) { /* cross-origin quirks: nothing else we can do */ }
+  if (!window.parent || window.parent === window) return;
+  const msg = { source: "oxford-chat", status: status, study_session_id: sessionId };
+  // Post to each allowed origin. The browser delivers only to the one that matches the
+  // parent's real origin and silently ignores the rest, so covering both domain variants
+  // is safe and means we don't have to know in advance whether it's the .eu datacenter.
+  CONFIG.QUALTRICS_ORIGINS.forEach((origin) => {
+    try { window.parent.postMessage(msg, origin); } catch (_) {}
+  });
 }
 
 // Signal that the conversation finished. In the iframe deployment this posts to Qualtrics (which owns
