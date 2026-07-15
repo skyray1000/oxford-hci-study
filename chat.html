@@ -202,7 +202,8 @@
     <div class="end-icon" id="endIcon">✓</div>
     <h2 id="endTitle">Conversation complete</h2>
     <p id="endBody">Thank you. Taking you back to the survey to continue.</p>
-    <a class="end-link" id="endLink" style="display:none" href="#">Continue</a>
+    <!-- target=_top so the return link breaks out of the Qualtrics iframe instead of loading inside it -->
+    <a class="end-link" id="endLink" style="display:none" href="#" target="_top" rel="noopener">Continue</a>
   </div>
 
   <!-- Passive-disclosure footer (shown when disclosure_mode is "passive" or "active") -->
@@ -258,8 +259,16 @@ const CONFIG = {
   //   Production:    your deployed backend origin, e.g. "https://study-backend.example.ox.ac.uk"
   BACKEND_URL: "https://oxford-hci-study.oii.ox.ac.uk",
 
-  // Your Qualtrics PART 2 survey link (post-conversation measures).
-  // Leave the placeholder while testing locally; the redirect is skipped until it's set.
+  // The origin of the Qualtrics survey that embeds this page in an <iframe>. When the
+  // conversation ends we postMessage a completion signal to the parent so Qualtrics can
+  // advance to the next page. Setting an explicit origin (not "*") means the signal is
+  // only ever delivered to Qualtrics, never to any other page that might frame us.
+  QUALTRICS_ORIGIN: "https://oii.qualtrics.com",
+
+  // STANDALONE-TESTING FALLBACK ONLY. When the page is opened directly (NOT embedded in
+  // an iframe), there is no parent to notify, so on completion we redirect here instead so
+  // the flow still advances during local testing. In the real (iframe) deployment this is
+  // unused — Qualtrics owns the page navigation. Leave the placeholder to disable it.
   QUALTRICS_PART2_URL: "https://oii.qualtrics.com/jfe/form/SV_71jDTRCXNT8LQsC",
 
   // Optional: a link shown on the "you've withdrawn" screen so participants can return
@@ -281,6 +290,7 @@ let nextUserTurn = 1;
 let lastReplyShownAt = null;  // ms timestamp when the most recent reply was shown (start of "thinking time")
 let prolificPid = null;       // captured from the entry URL (see captureEntryParams)
 let forceCondition = null;    // DEV-only preview aid, captured from the entry URL
+const inIframe = window.self !== window.top;   // true when embedded in Qualtrics (the real deployment)
 
 /* ===================== Elements ===================== */
 const $ = (id) => document.getElementById(id);
@@ -421,21 +431,40 @@ function showLikert(phase) {
 }
 
 /* ===================== Conversation flow ===================== */
-function redirectToQualtrics() {
+// Tell the embedding Qualtrics survey that the chat is over ("complete" or "withdrawn"), so it can
+// advance to the next page. Delivered ONLY to the Qualtrics origin. On the Qualtrics side, an event
+// listener on this message clicks the (hidden) Next button.
+function notifyParent(status) {
   try {
-    const url = new URL(CONFIG.QUALTRICS_PART2_URL);
-    url.searchParams.set("study_session_id", sessionId);   // only the join key…
-    url.searchParams.set("chat_completed", "1");            // …and a completion flag. Nothing else.
-    window.location.href = url.toString();
-  } catch (e) { console.error("Qualtrics redirect URL is not valid:", e); }
+    if (window.parent && window.parent !== window) {
+      window.parent.postMessage(
+        { source: "oxford-chat", status: status, study_session_id: sessionId },
+        CONFIG.QUALTRICS_ORIGIN
+      );
+    }
+  } catch (_) { /* cross-origin quirks: nothing else we can do */ }
+}
+
+// Signal that the conversation finished. In the iframe deployment this posts to Qualtrics (which owns
+// page navigation). When opened standalone for testing, it falls back to the old Part-2 redirect.
+function signalComplete() {
+  notifyParent("complete");
+  if (!inIframe && CONFIG.QUALTRICS_PART2_URL && !CONFIG.QUALTRICS_PART2_URL.includes("YOUR_QUALTRICS")) {
+    try {
+      const url = new URL(CONFIG.QUALTRICS_PART2_URL);
+      url.searchParams.set("study_session_id", sessionId);   // only the join key…
+      url.searchParams.set("chat_completed", "1");            // …and a completion flag. Nothing else.
+      window.location.href = url.toString();
+    } catch (e) { console.error("Part-2 fallback URL is not valid:", e); }
+  }
 }
 
 function afterComplete() {
   finished = true; lock(true);
-  // Let the acknowledgement sit on screen briefly, then show the completion screen and redirect.
+  // Let the acknowledgement sit on screen briefly, then show the completion screen and advance.
   setTimeout(() => {
     showScreen("complete", "Conversation complete", "Thank you. Taking you back to the survey to continue.");
-    if (!CONFIG.QUALTRICS_PART2_URL.includes("YOUR_QUALTRICS")) setTimeout(redirectToQualtrics, 2500);
+    setTimeout(signalComplete, 2500);
   }, 1600);
 }
 
@@ -489,7 +518,7 @@ async function sendOpinionOrTurn() {
     removeTyping();
     removeLastUserBubble();
     userInput.value = text;                       // restore so they can resend
-    if (e.status === 409) { showScreen("complete", "Conversation complete", "This conversation has already ended. Taking you back to the survey."); if (!CONFIG.QUALTRICS_PART2_URL.includes("YOUR_QUALTRICS")) setTimeout(redirectToQualtrics, 2500); return; }
+    if (e.status === 409) { showScreen("complete", "Conversation complete", "This conversation has already ended. Taking you back to the survey."); setTimeout(signalComplete, 2500); return; }
     if (e.status === 404) { showScreen("error", "Session expired", "We couldn't find your session. Please return to the survey to continue."); return; }
     showToast(e.detail || "Connection issue — please try again.");
     lock(false);                                  // allow retry; pendingKey is reused for idempotency
@@ -592,7 +621,7 @@ async function init() {
   if (data.status === "withdrawn") { showWithdrawnScreen(); return; }
   if (data.status === "completed") {
     showScreen("complete", "Conversation complete", "You've already completed this conversation. Taking you back to the survey.");
-    if (!CONFIG.QUALTRICS_PART2_URL.includes("YOUR_QUALTRICS")) setTimeout(redirectToQualtrics, 2000);
+    setTimeout(signalComplete, 2000);
     return;
   }
   applyDisclosure();
@@ -601,6 +630,7 @@ async function init() {
 
 /* ===================== Withdrawal ===================== */
 function showWithdrawnScreen() {
+  notifyParent("withdrawn");   // let Qualtrics route withdrawn participants (e.g. to a screen-out page)
   showScreen(
     "withdrawn",
     "You've withdrawn",
