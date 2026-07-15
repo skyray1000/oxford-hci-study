@@ -187,7 +187,7 @@
     <strong>Study topic</strong>
     Artificial intelligence is increasingly being used to help make important decisions — in hiring, university admissions, medical diagnosis, financial assessments, and more. People have a wide range of views on this, and there are no simple right or wrong answers. In this study, you will have a conversation with an AI chatbot about your opinion on the role of AI in decision-making.
     <br><br>
-    To begin, please write 2–3 sentences describing your current view on whether or not AI should be used to help make important decisions that affect people's lives. You must stay on topic in order to receive compensation.
+    To begin, please write at least one sentence describing your current view on whether or not AI should be used to help make important decisions that affect people's lives. You must stay on topic in order to receive compensation.
   </div>
 
   <div class="messages" id="messages">
@@ -216,7 +216,7 @@
   <div class="choice-area" id="choiceArea">
     <div class="choice-row">
       <button class="choice-btn" id="altBtn">Hear an alternative perspective</button>
-      <button class="choice-btn" id="ownBtn">More about my own viewpoint</button>
+      <button class="choice-btn" id="ownBtn">Hear more about my own viewpoint</button>
     </div>
   </div>
 
@@ -270,15 +270,9 @@ const CONFIG = {
     "https://oii.qualtrics.com",
   ],
 
-  // STANDALONE-TESTING FALLBACK ONLY. When the page is opened directly (NOT embedded in
-  // an iframe), there is no parent to notify, so on completion we redirect here instead so
-  // the flow still advances during local testing. In the real (iframe) deployment this is
-  // unused — Qualtrics owns the page navigation. Leave the placeholder to disable it.
-  QUALTRICS_PART2_URL: "https://oii.qualtrics.com/jfe/form/SV_71jDTRCXNT8LQsC",
-
   // Optional: a link shown on the "you've withdrawn" screen so participants can return
   // their submission on Prolific. Leave "" to show no link (withdrawal never auto-redirects).
-  PROLIFIC_RETURN_URL: "https://app.prolific.com/submissions/complete?cc=C1QJDKA8",
+  PROLIFIC_RETURN_URL: "https://app.prolific.com/submissions/complete?cc=CV8QU8LI",
 
   // The first message (the participant's opinion) must be at least this many characters.
   MIN_OPINION_CHARS: 40,
@@ -468,7 +462,7 @@ function afterComplete() {
   finished = true; lock(true);
   // Let the acknowledgement sit on screen briefly, then show the completion screen and advance.
   setTimeout(() => {
-    showScreen("complete", "Conversation complete", "Thank you. Taking you back to the survey to continue.");
+    showScreen("complete", "Conversation complete", "Thank you. Please continue on to the next page.");
     setTimeout(signalComplete, 2500);
   }, 1600);
 }
@@ -487,7 +481,7 @@ async function sendOpinionOrTurn() {
   if (!text) return;
   const isFirstSend = !started;                  // the very first send is the participant's opinion (turn 1)
   if (isFirstSend && text.length < CONFIG.MIN_OPINION_CHARS) {
-    showToast("Please write at least 2–3 sentences (about " + CONFIG.MIN_OPINION_CHARS + " characters) before sending.");
+    showToast("Please write at least one sentence stating your opinion (about " + CONFIG.MIN_OPINION_CHARS + " characters) before sending.");
     return;
   }
   const thinkMs = takeThinkMs();                 // reading + thinking + typing since the last reply was shown
