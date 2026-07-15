@@ -480,7 +480,7 @@ async function sendOpinionOrTurn() {
   const text = userInput.value.trim();
   if (!text) return;
   const isFirstSend = !started;                  // the very first send is the participant's opinion (turn 1)
-  if (isFirstSend && text.length < CONFIG.MIN_OPINION_CHARS) {
+  if (text.length < CONFIG.MIN_OPINION_CHARS) {
     showToast("Please write at least one sentence stating your opinion (about " + CONFIG.MIN_OPINION_CHARS + " characters) before sending.");
     return;
   }
