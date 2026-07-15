@@ -14,7 +14,7 @@
     --radius: 8px; --radius-lg: 12px;
   }
   html, body { height: 100%; background: var(--bg); font-family: system-ui, -apple-system, sans-serif; color: var(--text); }
-  .shell { display: flex; flex-direction: column; height: 100vh; max-width: 760px; margin: 0 auto; }
+  .shell { display: flex; flex-direction: column; height: 100vh; height: 100dvh; max-width: 760px; margin: 0 auto; }
 
   header { padding: 14px 20px; border-bottom: 1px solid var(--border); background: var(--surface); display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
   .header-dot { width: 8px; height: 8px; border-radius: 2px; background: var(--accent); flex-shrink: 0; }
@@ -26,10 +26,13 @@
   .withdraw-btn:hover { background: #fee2e2; border-color: #fca5a5; color: #dc2626; }
   .withdraw-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
-  .brief { background: #f0f4ff; border: 1px solid #c7d2fe; margin: 14px 16px 0; padding: 11px 14px; border-radius: var(--radius); font-size: .8rem; color: var(--accent-dk); line-height: 1.55; flex-shrink: 0; }
+  /* The brief now lives INSIDE the scrolling message list (as its first item) so it scrolls
+     up and out of the way once the conversation starts, instead of permanently occupying the
+     top of the screen (which crowded the chat, especially on mobile). */
+  .brief { background: #f0f4ff; border: 1px solid #c7d2fe; margin: 0 0 4px; padding: 11px 14px; border-radius: var(--radius); font-size: .8rem; color: var(--accent-dk); line-height: 1.55; flex-shrink: 0; }
   .brief strong { font-weight: 600; display: block; margin-bottom: 4px; font-size: .75rem; text-transform: uppercase; letter-spacing: .04em; }
 
-  .messages { flex: 1; overflow-y: auto; padding: 16px 16px 8px; display: flex; flex-direction: column; gap: 12px; scroll-behavior: smooth; }
+  .messages { flex: 1; min-height: 0; overflow-y: auto; padding: 16px 16px 8px; display: flex; flex-direction: column; gap: 12px; scroll-behavior: smooth; }
   .messages::-webkit-scrollbar { width: 4px; }
   .messages::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
   .connecting { margin: auto; color: var(--muted); font-size: .82rem; display: flex; align-items: center; gap: 8px; }
@@ -183,14 +186,15 @@
     <button class="withdraw-btn" id="withdrawBtn" title="Withdraw from study">Withdraw</button>
   </header>
 
-  <div class="brief" id="brief">
-    <strong>Study topic</strong>
-    Artificial intelligence is increasingly being used to help make important decisions — in hiring, university admissions, medical diagnosis, financial assessments, and more. People have a wide range of views on this, and there are no right or wrong answers. In this study, you will have a conversation with an AI chatbot about your opinion on the role of AI in decision-making.
-    <br><br>
-    To begin, please write at least one sentence describing your current view on whether or not AI should be used to help make important decisions that affect people's lives. Even if your view is nuanced, please indicate which way you lean overall, and why. You must stay on topic in order to receive compensation.
-  </div>
-
   <div class="messages" id="messages">
+    <!-- The brief is the first item in the scroll list so it scrolls away as the chat grows,
+         instead of a fixed panel permanently crowding the top of the screen (esp. on mobile). -->
+    <div class="brief" id="brief">
+      <strong>Study topic</strong>
+      Artificial intelligence is increasingly being used to help make important decisions — in hiring, university admissions, medical diagnosis, financial assessments, and more. People have a wide range of views on this, and there are no right or wrong answers. In this study, you will have a conversation with an AI chatbot about your opinion on the role of AI in decision-making.
+      <br><br>
+      To begin, please write at least one sentence describing your current view on whether or not AI should be used to help make important decisions that affect people's lives. Even if your view is nuanced, please indicate which way you lean overall, and why. You must stay on topic in order to receive compensation.
+    </div>
     <div class="connecting" id="connecting">
       <div class="typing-dots"><span></span><span></span><span></span></div>
       Connecting to the study…
