@@ -663,7 +663,7 @@ proceedBtn.addEventListener("click", () => { overlay.style.display = "none"; ena
 userInput.addEventListener("input", () => { userInput.style.height = "auto"; userInput.style.height = Math.min(userInput.scrollHeight, 110) + "px"; });
 userInput.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendOpinionOrTurn(); } });
 sendBtn.addEventListener("click", sendOpinionOrTurn);
-ownBtn.addEventListener("click", () => chooseFinal("own", "More about my own viewpoint"));
+ownBtn.addEventListener("click", () => chooseFinal("own", "Hear more about my own viewpoint"));
 altBtn.addEventListener("click", () => chooseFinal("alternative", "Hear an alternative perspective"));
 
 // Nudge participants not to refresh / navigate away mid-conversation (their turns are saved, but the
