@@ -513,7 +513,12 @@ async function sendOpinionOrTurn() {
     if (data.complete) { afterComplete(); return; }
     markReplyShown();
     // After the LAST turn, ask the Likert item again BEFORE showing the final-choice buttons.
-    if (data.awaiting_final_choice) { await showLikert("final"); showFinalChoice(); return; }
+   if (data.awaiting_final_choice) {
+      await new Promise(r => setTimeout(r, 4000));
+      await showLikert("final");
+      showFinalChoice();
+      return;
+    }
     nextUserTurn = Math.min((data.turn || nextUserTurn) + 1, 6);
     setBadge("Turn " + nextUserTurn + " of 6");
     lock(false); userInput.focus();
