@@ -73,17 +73,19 @@
      depend on any one browser rendering the sibling-combinator or the tiny hidden
      radio hit-area — that fragility was the cross-browser problem. */
   .likert-q { font-size: .9rem; color: var(--text); line-height: 1.55; margin-bottom: 18px; }
-  .likert-scale { display: flex; justify-content: space-between; gap: 6px; margin-bottom: 10px; }
-  .likert-opt { flex: 1 1 0; min-width: 0; margin: 0; position: relative; }
-  .likert-opt input { position: absolute; width: 1px; height: 1px; opacity: 0; margin: 0; pointer-events: none; }
-  .likert-opt span { display: block; text-align: center; padding: 12px 0; border: 1px solid var(--border); border-radius: var(--radius); font-size: .9rem; font-weight: 600; color: var(--text); cursor: pointer; -webkit-user-select: none; user-select: none; transition: background .12s, border-color .12s, color .12s; }
-  .likert-opt span:hover { border-color: var(--accent); background: var(--accent-lt); }
-  .likert-opt.sel span,
-  .likert-opt input:checked + span { background: var(--accent); border-color: var(--accent); color: #fff; }
-  .likert-opt input:focus-visible + span { outline: 2px solid var(--accent-dk); outline-offset: 2px; }
-  .likert-ends { display: flex; justify-content: space-between; font-size: .72rem; color: var(--muted); margin-bottom: 20px; gap: 10px; }
-  .likert-ends span:last-child { text-align: right; }
-  @media (max-width: 420px) { .likert-scale { gap: 4px; } .likert-opt span { padding: 12px 0; font-size: .85rem; } }
+  /* Feeling-of-rightness (FOR) 1–100 slider. The thumb is hidden until the participant
+     first interacts (`.untouched`), so there is no anchoring on a pre-set midpoint and
+     "Continue" only enables once a real value has been chosen. */
+  .slider-wrap { margin-bottom: 22px; }
+  .slider-value { display: block; text-align: center; font-size: 1.6rem; font-weight: 700; color: var(--accent); line-height: 1; min-height: 1.6rem; margin-bottom: 14px; }
+  .slider-input { width: 100%; -webkit-appearance: none; appearance: none; height: 6px; border-radius: 4px; background: var(--border); outline: none; cursor: pointer; }
+  .slider-input::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 22px; height: 22px; border-radius: 50%; background: var(--accent); border: none; box-shadow: 0 1px 3px rgba(0,0,0,.25); cursor: pointer; transition: opacity .12s; }
+  .slider-input::-moz-range-thumb { width: 22px; height: 22px; border-radius: 50%; background: var(--accent); border: none; box-shadow: 0 1px 3px rgba(0,0,0,.25); cursor: pointer; transition: opacity .12s; }
+  .slider-input.untouched::-webkit-slider-thumb { opacity: 0; }
+  .slider-input.untouched::-moz-range-thumb { opacity: 0; }
+  .slider-input:focus-visible { outline: 2px solid var(--accent-dk); outline-offset: 4px; }
+  .slider-ends { display: flex; justify-content: space-between; font-size: .72rem; color: var(--muted); margin-top: 12px; gap: 10px; }
+  .slider-ends span:last-child { text-align: right; }
 
   /* ── Passive disclosure footer ── */
   .disclosure-footer { display: none; background: #fffbeb; border-top: 1px solid #fcd34d; padding: 8px 16px; font-size: .76rem; color: #92400e; align-items: center; gap: 8px; flex-shrink: 0; }
@@ -156,21 +158,17 @@
   </div>
 </div>
 
-<!-- Likert-scale overlay (shown deterministically after turn 1 and after turn 6) -->
+<!-- Feeling-of-rightness (FOR) slider overlay (shown deterministically after turn 1 and after turn 6).
+     The question text is set per phase in JS (see LIKERT_Q). -->
 <div class="overlay" id="likertOverlay" role="dialog" aria-modal="true" aria-labelledby="likertTitle">
   <div class="overlay-card">
     <h2 id="likertTitle">One quick question</h2>
-    <p class="likert-q">At this moment, how right does your view on this topic feel to you?</p>
-    <div class="likert-scale" id="likertScale" role="radiogroup" aria-labelledby="likertTitle">
-      <label class="likert-opt"><input type="radio" name="likert" value="1"><span>1</span></label>
-      <label class="likert-opt"><input type="radio" name="likert" value="2"><span>2</span></label>
-      <label class="likert-opt"><input type="radio" name="likert" value="3"><span>3</span></label>
-      <label class="likert-opt"><input type="radio" name="likert" value="4"><span>4</span></label>
-      <label class="likert-opt"><input type="radio" name="likert" value="5"><span>5</span></label>
-      <label class="likert-opt"><input type="radio" name="likert" value="6"><span>6</span></label>
-      <label class="likert-opt"><input type="radio" name="likert" value="7"><span>7</span></label>
+    <p class="likert-q" id="likertQ"></p>
+    <div class="slider-wrap">
+      <output class="slider-value" id="sliderValue" for="sliderInput">—</output>
+      <input type="range" id="sliderInput" class="slider-input untouched" min="1" max="100" step="1" value="50" aria-labelledby="likertQ">
+      <div class="slider-ends"><span>1 — Not at all right</span><span>100 — Completely right</span></div>
     </div>
-    <div class="likert-ends"><span>1 = Doesn't feel right at all</span><span>7 = Feels very right</span></div>
     <button class="proceed-btn" id="likertSubmit" disabled>Continue</button>
   </div>
 </div>
@@ -216,11 +214,12 @@
     <span>Note: This model may prioritize agreement over critical evaluation. Assess logic carefully.</span>
   </div>
 
-  <!-- Final-choice buttons (J4), shown after turn 6 -->
+  <!-- Exploratory-choice probe buttons, shown after turn 6. Neutral wording, identical across
+       all conditions. Recorded as a single binary choice (refine | shift) with response latency. -->
   <div class="choice-area" id="choiceArea">
     <div class="choice-row">
-      <button class="choice-btn" id="altBtn">Hear an alternative perspective</button>
-      <button class="choice-btn" id="ownBtn">Hear more about my own viewpoint</button>
+      <button class="choice-btn" id="refineBtn">keep building/refining my argument</button>
+      <button class="choice-btn" id="shiftBtn">shift to another angle</button>
     </div>
   </div>
 
@@ -300,9 +299,10 @@ const $ = (id) => document.getElementById(id);
 const messagesEl = $("messages"), connecting = $("connecting"), brief = $("brief"),
       userInput = $("userInput"), sendBtn = $("send"), turnBadge = $("turnBadge"),
       inputArea = $("inputArea"), choiceArea = $("choiceArea"),
-      ownBtn = $("ownBtn"), altBtn = $("altBtn"),
+      refineBtn = $("refineBtn"), shiftBtn = $("shiftBtn"),
       overlay = $("overlay"), ackCheck = $("ackCheck"), proceedBtn = $("proceedBtn"),
-      likertOverlay = $("likertOverlay"), likertScale = $("likertScale"), likertSubmit = $("likertSubmit"),
+      likertOverlay = $("likertOverlay"), likertQ = $("likertQ"), sliderInput = $("sliderInput"),
+      sliderValue = $("sliderValue"), likertSubmit = $("likertSubmit"),
       footer = $("disclosureFooter"), toast = $("toast"),
       endScreen = $("endScreen"), endIcon = $("endIcon"), endTitle = $("endTitle"),
       endBody = $("endBody"), endLink = $("endLink"),
@@ -390,30 +390,34 @@ function showScreen(kind, title, body, linkUrl) {
   setBadge(kind === "complete" ? "Complete" : (kind === "withdrawn" ? "Withdrawn" : "—"));
 }
 
-/* ===================== Likert scale ===================== */
-// Shows the Likert overlay, waits for a valid answer, POSTs it, and resolves once saved.
-// Keeps the overlay open (with a toast) if saving fails, so the answer is never lost.
+/* ===================== Feeling-of-rightness (FOR) slider ===================== */
+// Exact, phase-specific wording (identical across all conditions).
+const LIKERT_Q = {
+  initial: "At the moment you gave that answer, how right did it feel?",
+  final:   "Right now, before reconsidering further, how right does your current position feel?",
+};
+// Shows the FOR slider overlay, waits for a real interaction, POSTs the 1–100 value, and
+// resolves once saved. Keeps the overlay open (with a toast) if saving fails, so the answer
+// is never lost. The thumb stays hidden until first interaction to avoid midpoint anchoring.
 function showLikert(phase) {
   return new Promise((resolve) => {
-    const opts = Array.prototype.slice.call(likertScale.querySelectorAll('input[name="likert"]'));
-    opts.forEach((r) => { r.checked = false; if (r.parentElement) r.parentElement.classList.remove("sel"); });
+    likertQ.textContent = LIKERT_Q[phase] || LIKERT_Q.initial;
+    sliderInput.value = 50;                       // neutral internal start; hidden until touched
+    sliderInput.classList.add("untouched");
+    sliderValue.textContent = "—";
     likertSubmit.disabled = true;
     likertOverlay.style.display = "flex";
-    const first = opts[0];
-    if (first) first.focus();
+    let touched = false;
 
-    // Reads the real :checked state, so it's safe to fire from either change or click.
-    // Drives the selected look via a class (not just CSS :checked + span) for cross-browser reliability.
-    const refresh = () => {
-      let picked = null;
-      opts.forEach((r) => { if (r.checked) picked = r; if (r.parentElement) r.parentElement.classList.toggle("sel", r.checked); });
-      likertSubmit.disabled = !picked;
-      return picked;
+    const onInput = () => {
+      touched = true;
+      sliderInput.classList.remove("untouched");
+      sliderValue.textContent = sliderInput.value;
+      likertSubmit.disabled = false;
     };
     const onSubmit = async () => {
-      const picked = refresh();
-      if (!picked) return;
-      const value = parseInt(picked.value, 10);
+      if (!touched) return;                        // require a real selection
+      const value = parseInt(sliderInput.value, 10);
       likertSubmit.disabled = true;
       try {
         await apiPost("/api/likert", { study_session_id: sessionId, phase, value });
@@ -421,14 +425,12 @@ function showLikert(phase) {
         // 409 = session already finished; nothing more we can save, so let them proceed.
         if (e.status !== 409) { likertSubmit.disabled = false; showToast(e.detail || "Couldn't save — please try again."); return; }
       }
-      likertScale.removeEventListener("change", refresh);
-      likertScale.removeEventListener("click", refresh);
+      sliderInput.removeEventListener("input", onInput);
       likertSubmit.removeEventListener("click", onSubmit);
       likertOverlay.style.display = "none";
       resolve(value);
     };
-    likertScale.addEventListener("change", refresh);
-    likertScale.addEventListener("click", refresh);   // fallback for browsers slow to fire 'change' on the wrapped radio
+    sliderInput.addEventListener("input", onInput);
     likertSubmit.addEventListener("click", onSubmit);
   });
 }
@@ -537,7 +539,7 @@ async function chooseFinal(choice, label) {
   if (isLocked || finished) return;
   const thinkMs = takeThinkMs();
   lock(true);
-  ownBtn.disabled = altBtn.disabled = true;
+  refineBtn.disabled = shiftBtn.disabled = true;
   appendMessage("user", label);
   if (!pendingKey) pendingKey = uuid();
   showTyping();
@@ -550,7 +552,7 @@ async function chooseFinal(choice, label) {
   } catch (e) {
     removeTyping();
     removeLastUserBubble();
-    ownBtn.disabled = altBtn.disabled = false;
+    refineBtn.disabled = shiftBtn.disabled = false;
     lock(false);
     showToast(e.detail || "Connection issue — please try again.");
   }
@@ -668,8 +670,8 @@ proceedBtn.addEventListener("click", () => { overlay.style.display = "none"; ena
 userInput.addEventListener("input", () => { userInput.style.height = "auto"; userInput.style.height = Math.min(userInput.scrollHeight, 110) + "px"; });
 userInput.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendOpinionOrTurn(); } });
 sendBtn.addEventListener("click", sendOpinionOrTurn);
-ownBtn.addEventListener("click", () => chooseFinal("own", "Hear more about my own viewpoint"));
-altBtn.addEventListener("click", () => chooseFinal("alternative", "Hear an alternative perspective"));
+refineBtn.addEventListener("click", () => chooseFinal("refine", "keep building/refining my argument"));
+shiftBtn.addEventListener("click", () => chooseFinal("shift", "shift to another angle"));
 
 // Nudge participants not to refresh / navigate away mid-conversation (their turns are saved, but the
 // on-screen history isn't restored on reload).
