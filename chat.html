@@ -77,8 +77,14 @@
      first interacts (`.untouched`), so there is no anchoring on a pre-set midpoint and
      "Continue" only enables once a real value has been chosen. */
   .slider-wrap { margin-bottom: 22px; }
-  .slider-value { display: block; text-align: center; font-size: 1.6rem; font-weight: 700; color: var(--accent); line-height: 1; min-height: 1.6rem; margin-bottom: 14px; }
-  .slider-input { width: 100%; -webkit-appearance: none; appearance: none; height: 6px; border-radius: 4px; background: var(--border); outline: none; cursor: pointer; }
+  .slider-value { display: block; text-align: center; font-size: 1.6rem; font-weight: 700; color: var(--accent); line-height: 1; min-height: 1.6rem; margin-bottom: 8px; }
+  /* Cue that the empty track is an interactive slider (the thumb is hidden until first use).
+     Gently pulses to draw the eye, and is hidden once the participant moves the slider. */
+  .slider-hint { text-align: center; font-size: .8rem; font-weight: 600; color: var(--accent); margin-bottom: 12px; animation: hintPulse 1.6s ease-in-out infinite; }
+  .slider-hint.hide { display: none; }
+  @keyframes hintPulse { 0%, 100% { opacity: .5; } 50% { opacity: 1; } }
+  .slider-input { width: 100%; -webkit-appearance: none; appearance: none; height: 8px; border-radius: 5px; background: var(--border); outline: none; cursor: pointer; }
+  .slider-input.untouched { background: linear-gradient(90deg, var(--accent-lt), var(--border), var(--accent-lt)); }
   .slider-input::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 22px; height: 22px; border-radius: 50%; background: var(--accent); border: none; box-shadow: 0 1px 3px rgba(0,0,0,.25); cursor: pointer; transition: opacity .12s; }
   .slider-input::-moz-range-thumb { width: 22px; height: 22px; border-radius: 50%; background: var(--accent); border: none; box-shadow: 0 1px 3px rgba(0,0,0,.25); cursor: pointer; transition: opacity .12s; }
   .slider-input.untouched::-webkit-slider-thumb { opacity: 0; }
@@ -166,6 +172,7 @@
     <p class="likert-q" id="likertQ"></p>
     <div class="slider-wrap">
       <output class="slider-value" id="sliderValue" for="sliderInput">—</output>
+      <p class="slider-hint" id="sliderHint">↔ Click or drag the slider to set your answer</p>
       <input type="range" id="sliderInput" class="slider-input untouched" min="1" max="100" step="1" value="50" aria-labelledby="likertQ">
       <div class="slider-ends"><span>1 — Not at all right</span><span>100 — Completely right</span></div>
     </div>
@@ -302,7 +309,7 @@ const messagesEl = $("messages"), connecting = $("connecting"), brief = $("brief
       strengthenBtn = $("strengthenBtn"), examineBtn = $("examineBtn"),
       overlay = $("overlay"), ackCheck = $("ackCheck"), proceedBtn = $("proceedBtn"),
       likertOverlay = $("likertOverlay"), likertQ = $("likertQ"), sliderInput = $("sliderInput"),
-      sliderValue = $("sliderValue"), likertSubmit = $("likertSubmit"),
+      sliderValue = $("sliderValue"), sliderHint = $("sliderHint"), likertSubmit = $("likertSubmit"),
       footer = $("disclosureFooter"), toast = $("toast"),
       endScreen = $("endScreen"), endIcon = $("endIcon"), endTitle = $("endTitle"),
       endBody = $("endBody"), endLink = $("endLink"),
@@ -405,6 +412,7 @@ function showLikert(phase) {
     sliderInput.value = 50;                       // neutral internal start; hidden until touched
     sliderInput.classList.add("untouched");
     sliderValue.textContent = "—";
+    sliderHint.classList.remove("hide");          // show the "it's a slider" cue until first interaction
     likertSubmit.disabled = true;
     likertOverlay.style.display = "flex";
     let touched = false;
@@ -412,6 +420,7 @@ function showLikert(phase) {
     const onInput = () => {
       touched = true;
       sliderInput.classList.remove("untouched");
+      sliderHint.classList.add("hide");
       sliderValue.textContent = sliderInput.value;
       likertSubmit.disabled = false;
     };
