@@ -214,12 +214,12 @@
     <span>Note: This model may prioritize agreement over critical evaluation. Assess logic carefully.</span>
   </div>
 
-  <!-- Exploratory-choice probe buttons, shown after turn 6. Neutral wording, identical across
-       all conditions. Recorded as a single binary choice (refine | shift) with response latency. -->
+  <!-- Exploratory-choice probe buttons (Path B), shown after turn 6. Neutral wording, identical
+       across all conditions. Recorded as a single binary choice (strengthen | examine) with latency. -->
   <div class="choice-area" id="choiceArea">
     <div class="choice-row">
-      <button class="choice-btn" id="refineBtn">keep building/refining my argument</button>
-      <button class="choice-btn" id="shiftBtn">shift to another angle</button>
+      <button class="choice-btn" id="strengthenBtn">Strengthening and refining my argument</button>
+      <button class="choice-btn" id="examineBtn">Examining other arguments</button>
     </div>
   </div>
 
@@ -299,7 +299,7 @@ const $ = (id) => document.getElementById(id);
 const messagesEl = $("messages"), connecting = $("connecting"), brief = $("brief"),
       userInput = $("userInput"), sendBtn = $("send"), turnBadge = $("turnBadge"),
       inputArea = $("inputArea"), choiceArea = $("choiceArea"),
-      refineBtn = $("refineBtn"), shiftBtn = $("shiftBtn"),
+      strengthenBtn = $("strengthenBtn"), examineBtn = $("examineBtn"),
       overlay = $("overlay"), ackCheck = $("ackCheck"), proceedBtn = $("proceedBtn"),
       likertOverlay = $("likertOverlay"), likertQ = $("likertQ"), sliderInput = $("sliderInput"),
       sliderValue = $("sliderValue"), likertSubmit = $("likertSubmit"),
@@ -539,7 +539,7 @@ async function chooseFinal(choice, label) {
   if (isLocked || finished) return;
   const thinkMs = takeThinkMs();
   lock(true);
-  refineBtn.disabled = shiftBtn.disabled = true;
+  strengthenBtn.disabled = examineBtn.disabled = true;
   appendMessage("user", label);
   if (!pendingKey) pendingKey = uuid();
   showTyping();
@@ -552,7 +552,7 @@ async function chooseFinal(choice, label) {
   } catch (e) {
     removeTyping();
     removeLastUserBubble();
-    refineBtn.disabled = shiftBtn.disabled = false;
+    strengthenBtn.disabled = examineBtn.disabled = false;
     lock(false);
     showToast(e.detail || "Connection issue — please try again.");
   }
@@ -670,8 +670,8 @@ proceedBtn.addEventListener("click", () => { overlay.style.display = "none"; ena
 userInput.addEventListener("input", () => { userInput.style.height = "auto"; userInput.style.height = Math.min(userInput.scrollHeight, 110) + "px"; });
 userInput.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendOpinionOrTurn(); } });
 sendBtn.addEventListener("click", sendOpinionOrTurn);
-refineBtn.addEventListener("click", () => chooseFinal("refine", "keep building/refining my argument"));
-shiftBtn.addEventListener("click", () => chooseFinal("shift", "shift to another angle"));
+strengthenBtn.addEventListener("click", () => chooseFinal("strengthen", "Strengthening and refining my argument"));
+examineBtn.addEventListener("click", () => chooseFinal("examine", "Examining other arguments"));
 
 // Nudge participants not to refresh / navigate away mid-conversation (their turns are saved, but the
 // on-screen history isn't restored on reload).
